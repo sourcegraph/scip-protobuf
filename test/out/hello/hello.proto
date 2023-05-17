@@ -1,0 +1,28 @@
+  syntax = "proto3";
+  
+  package hello;
+  
+  message Greeting {
+//        ^^^^^^^^ reference . . hello hello.proto/Greeting#
+    Kind kind = 1;
+//       ^^^^ reference . . hello hello.proto/Greeting#kind.
+    Recipient recipient = 2;
+//            ^^^^^^^^^ reference . . hello hello.proto/Greeting#recipient.
+  
+    enum Kind {
+//       ^^^^ reference . . hello hello.proto/Greeting#Kind#
+      Formal = 0;
+//    ^^^^^^ reference . . hello hello.proto/Greeting#Formal.
+      Informal = 1;
+//    ^^^^^^^^ reference . . hello hello.proto/Greeting#Informal.
+    }
+  
+    message Recipient {
+//          ^^^^^^^^^ reference . . hello hello.proto/Greeting#Recipient#
+      string name = 1;
+//           ^^^^ reference . . hello hello.proto/Greeting#Recipient#name.
+      int64 coolness_percent = 2;
+//          ^^^^^^^^^^^^^^^^ reference . . hello hello.proto/Greeting#Recipient#coolness_percent.
+    }
+  }
+  

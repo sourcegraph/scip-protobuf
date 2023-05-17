@@ -1,0 +1,4 @@
+/target
+/scip
+/scip-snapshot
+/test/out/*.scip

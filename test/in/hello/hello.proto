@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package hello;
+
+message Greeting {
+  Kind kind = 1;
+  Recipient recipient = 2;
+
+  enum Kind {
+    Formal = 0;
+    Informal = 1;
+  }
+
+  message Recipient {
+    string name = 1;
+    int64 coolness_percent = 2;
+  }
+}
