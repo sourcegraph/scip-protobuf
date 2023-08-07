@@ -2,3 +2,4 @@
 /scip
 /scip-snapshot
 /test/out/*.scip
+/test/out/*.dset

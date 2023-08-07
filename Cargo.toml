@@ -8,7 +8,8 @@ edition = "2021"
 [dependencies]
 scip = { git = "https://github.com/sourcegraph/scip", rev="ee677ba3756cdcdb55b39942b5701f0fde9d69fa" }
 protobuf = "3"
+clap = { version = "4.3.19", features = ["derive"] }
 
 [[bin]]
-name = "protoc-gen-scip"
+name = "scip-protobuf"
 path = "src/main.rs"

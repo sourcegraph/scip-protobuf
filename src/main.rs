@@ -1,16 +1,17 @@
+use clap::Parser;
 use std::{
     collections::HashMap,
-    fs,
-    io::{stdin, stdout, BufReader, BufWriter, Write},
-    vec,
+    fs::{self, canonicalize, File},
+    io::{BufReader, BufWriter, Write},
+    path::PathBuf,
+    process, vec,
 };
 
 use protobuf::{
     descriptor::{
         DescriptorProto, EnumDescriptorProto, EnumValueDescriptorProto, FieldDescriptorProto,
-        FileDescriptorProto,
+        FileDescriptorProto, FileDescriptorSet,
     },
-    plugin::{CodeGeneratorRequest, CodeGeneratorResponse},
     Enum, Message, MessageField,
 };
 use scip::{
@@ -20,6 +21,19 @@ use scip::{
         SymbolInformation, SymbolRole, TextEncoding, ToolInfo,
     },
 };
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(short = 'i', long = "in")]
+    input: PathBuf,
+
+    #[arg(short = 'o', long = "out")]
+    output: PathBuf,
+
+    #[arg(short = 'r', long = "root")]
+    root: PathBuf,
+}
 
 type TypeTree<'a> = HashMap<String, TypeTreeValue<'a>>;
 
@@ -135,30 +149,6 @@ fn get_descriptors_from_path(
                     return Some(DescriptorsFromPathResult::TypeToResolve(
                         field_info.type_name.clone().unwrap(),
                     ));
-                    // if let Some(type_name) = &field_info.type_name {
-                    //     while let Some(parent) = parents.pop() {
-                    //         descriptors.pop();
-                    //         match parent {
-                    //             DescriptorPathParent::MessageDescriptor(msg) => {
-                    //                 for nested in &msg.nested_type {
-                    //                     eprintln!(
-                    //                         "{} vs {}",
-                    //                         nested.name.as_ref().unwrap(),
-                    //                         type_name
-                    //                     );
-                    //                     if *nested.name.as_ref().unwrap() == *type_name {
-                    //                         descriptors.push(Descriptor {
-                    //                             name: nested.name.clone().unwrap(),
-                    //                             suffix: Suffix::Term.into(),
-                    //                             ..Default::default()
-                    //                         });
-                    //                         return Some(descriptors);
-                    //                     }
-                    //                 }
-                    //             }
-                    //         }
-                    //     }
-                    // }
                 }
                 _ => return None,
             },
@@ -284,32 +274,38 @@ fn type_tree_value_to_descriptor(value: &TypeTreeValue) -> Descriptor {
 }
 
 fn main() {
-    let mut buf_reader = BufReader::new(stdin());
-    let mut buf_writer = BufWriter::new(stdout());
+    let args = Args::parse();
 
-    let request = CodeGeneratorRequest::parse_from_reader(&mut buf_reader).unwrap();
+    let dset_file = match File::open(args.input) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open input file: {}", e);
+            process::exit(1)
+        }
+    };
 
-    let params = request
-        .parameter
-        .expect("[root that matches proto path/is your scip root] [output path]");
-    let arguments = params.split(" ").collect::<Vec<&str>>();
+    let scip_file = match File::create(&args.output) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to create output file: {}", e);
+            process::exit(1)
+        }
+    };
 
-    if arguments.len() != 2 {
-        panic!("[root that matches proto path/is your scip root] [output path]");
-    }
+    let mut buf_reader = BufReader::new(dset_file);
+    let mut buf_writer = BufWriter::new(scip_file);
 
-    let root = arguments[0];
-    let output_path = arguments[1];
+    let request = FileDescriptorSet::parse_from_reader(&mut buf_reader).unwrap();
 
     let mut type_tree = TypeTree::new();
 
-    for req in &request.proto_file {
+    for req in &request.file {
         populate_type_tree(&mut type_tree, req);
     }
 
     let mut documents = vec![];
 
-    for req in &request.proto_file {
+    for req in &request.file {
         let mut symbols = vec![];
         let mut occurrences = vec![];
 
@@ -386,12 +382,13 @@ fn main() {
 
     let index = Index {
         metadata: MessageField::some(Metadata {
-            project_root: "file://".to_string() + root,
+            project_root: "file://".to_string()
+                + canonicalize(&args.root).unwrap().to_str().unwrap(),
             text_document_encoding: TextEncoding::UTF8.into(),
             tool_info: MessageField::some(ToolInfo {
                 name: "scip-protobuf".to_string(),
                 version: "0.0.1".to_string(),
-                arguments: arguments.iter().map(|v| v.to_string()).collect(),
+                arguments: std::env::args().collect(),
                 ..Default::default()
             }),
             ..Default::default()
@@ -400,17 +397,7 @@ fn main() {
         ..Default::default()
     };
 
-    // We send back no files as our data is not valid utf8 (it's binary)
-    CodeGeneratorResponse {
-        error: None,
-        file: vec![],
-        supported_features: Some(1),
-        ..Default::default()
-    }
-    .write_to_writer(&mut buf_writer)
-    .unwrap();
-
-    let file = fs::File::create(output_path).expect("Could not open output file!");
+    let file = fs::File::create(&args.output).expect("Could not open output file!");
     let mut file_buf_writer = BufWriter::new(file);
     index.write_to_writer(&mut file_buf_writer).unwrap();
 
