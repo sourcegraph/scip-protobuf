@@ -1,6 +1,8 @@
 use std::{
+    collections::HashMap,
     fs,
     io::{stdin, stdout, BufReader, BufWriter, Write},
+    vec,
 };
 
 use protobuf::{
@@ -9,15 +11,31 @@ use protobuf::{
         FileDescriptorProto,
     },
     plugin::{CodeGeneratorRequest, CodeGeneratorResponse},
-    Message, MessageField,
+    Enum, Message, MessageField,
 };
 use scip::{
     symbol::format_symbol,
     types::{
         descriptor::Suffix, Descriptor, Document, Index, Metadata, Occurrence, Package, Symbol,
-        TextEncoding, ToolInfo,
+        SymbolInformation, SymbolRole, TextEncoding, ToolInfo,
     },
 };
+
+type TypeTree<'a> = HashMap<String, TypeTreeValue<'a>>;
+
+#[derive(Debug)]
+struct TypeTreeValue<'a> {
+    name: String,
+    data: TypeTreeData<'a>,
+    children: TypeTree<'a>,
+}
+
+#[derive(Debug)]
+enum TypeTreeData<'a> {
+    Package(()),
+    MessageDescriptor(&'a DescriptorProto),
+    EnumDescriptor(&'a EnumDescriptorProto),
+}
 
 enum DescriptorPathSegment<'a> {
     FileDescriptor(&'a FileDescriptorProto),
@@ -32,10 +50,15 @@ enum DescriptorPathSegment<'a> {
     EnumValueDescriptor(&'a EnumValueDescriptorProto),
 }
 
+enum DescriptorsFromPathResult {
+    Descriptors(Vec<Descriptor>),
+    TypeToResolve(String),
+}
+
 fn get_descriptors_from_path(
     start: DescriptorPathSegment,
     path: &Vec<i32>,
-) -> Option<Vec<Descriptor>> {
+) -> Option<DescriptorsFromPathResult> {
     let mut current_segment = start;
     let mut descriptors = vec![];
 
@@ -107,6 +130,36 @@ fn get_descriptors_from_path(
                         ..Default::default()
                     });
                 }
+                6 => {
+                    // Names always seem to be .a.b.c (check this assumption)
+                    return Some(DescriptorsFromPathResult::TypeToResolve(
+                        field_info.type_name.clone().unwrap(),
+                    ));
+                    // if let Some(type_name) = &field_info.type_name {
+                    //     while let Some(parent) = parents.pop() {
+                    //         descriptors.pop();
+                    //         match parent {
+                    //             DescriptorPathParent::MessageDescriptor(msg) => {
+                    //                 for nested in &msg.nested_type {
+                    //                     eprintln!(
+                    //                         "{} vs {}",
+                    //                         nested.name.as_ref().unwrap(),
+                    //                         type_name
+                    //                     );
+                    //                     if *nested.name.as_ref().unwrap() == *type_name {
+                    //                         descriptors.push(Descriptor {
+                    //                             name: nested.name.clone().unwrap(),
+                    //                             suffix: Suffix::Term.into(),
+                    //                             ..Default::default()
+                    //                         });
+                    //                         return Some(descriptors);
+                    //                     }
+                    //                 }
+                    //             }
+                    //         }
+                    //     }
+                    // }
+                }
                 _ => return None,
             },
             DescriptorPathSegment::EnumValueDescriptors(values) => {
@@ -129,7 +182,105 @@ fn get_descriptors_from_path(
         }
     }
 
-    Some(descriptors)
+    Some(DescriptorsFromPathResult::Descriptors(descriptors))
+}
+
+// TODO: DOD-ify
+fn populate_type_tree<'a>(tree: &mut TypeTree<'a>, file: &'a FileDescriptorProto) {
+    let pkg = file.package.clone().unwrap();
+    if !tree.contains_key(&pkg) {
+        tree.insert(
+            pkg.clone(),
+            TypeTreeValue {
+                name: pkg.clone(),
+                data: TypeTreeData::Package(()),
+                children: TypeTree::new(),
+            },
+        );
+    }
+
+    let package = tree.get_mut(&pkg).unwrap();
+
+    for msg in &file.message_type {
+        package.children.insert(
+            msg.name.clone().unwrap(),
+            TypeTreeValue {
+                name: msg.name.clone().unwrap(),
+                data: TypeTreeData::MessageDescriptor(msg),
+                children: TypeTree::new(),
+            },
+        );
+        populate_type_tree_internal(
+            package
+                .children
+                .get_mut(msg.name.as_ref().unwrap())
+                .unwrap(),
+        );
+    }
+
+    for en in &file.enum_type {
+        package.children.insert(
+            en.name.clone().unwrap(),
+            TypeTreeValue {
+                name: en.name.clone().unwrap(),
+                data: TypeTreeData::EnumDescriptor(en),
+                children: TypeTree::new(),
+            },
+        );
+        populate_type_tree_internal(package.children.get_mut(en.name.as_ref().unwrap()).unwrap());
+    }
+}
+
+// TODO: DOD-ify
+fn populate_type_tree_internal(value: &mut TypeTreeValue) {
+    match value.data {
+        TypeTreeData::Package(_) => unreachable!(),
+        TypeTreeData::MessageDescriptor(msg) => {
+            for msg in &msg.nested_type {
+                value.children.insert(
+                    msg.name.clone().unwrap(),
+                    TypeTreeValue {
+                        name: msg.name.clone().unwrap(),
+
+                        data: TypeTreeData::MessageDescriptor(msg),
+                        children: TypeTree::new(),
+                    },
+                );
+                populate_type_tree_internal(
+                    value.children.get_mut(msg.name.as_ref().unwrap()).unwrap(),
+                );
+            }
+
+            for en in &msg.enum_type {
+                value.children.insert(
+                    en.name.clone().unwrap(),
+                    TypeTreeValue {
+                        name: en.name.clone().unwrap(),
+
+                        data: TypeTreeData::EnumDescriptor(en),
+                        children: TypeTree::new(),
+                    },
+                );
+                populate_type_tree_internal(
+                    value.children.get_mut(en.name.as_ref().unwrap()).unwrap(),
+                );
+            }
+        }
+        TypeTreeData::EnumDescriptor(_) => {}
+    }
+}
+
+fn type_tree_value_to_descriptor(value: &TypeTreeValue) -> Descriptor {
+    Descriptor {
+        name: value.name.clone(),
+        suffix: match value.data {
+            TypeTreeData::Package(_) => unreachable!(),
+            TypeTreeData::MessageDescriptor(_) => Suffix::Type,
+            TypeTreeData::EnumDescriptor(_) => Suffix::Type,
+        }
+        .into(),
+        ..Default::default()
+    }
 }
 
 fn main() {
@@ -150,39 +301,73 @@ fn main() {
     let root = arguments[0];
     let output_path = arguments[1];
 
+    let mut type_tree = TypeTree::new();
+
+    for req in &request.proto_file {
+        populate_type_tree(&mut type_tree, req);
+    }
+
     let mut documents = vec![];
 
-    for req in request.proto_file {
+    for req in &request.proto_file {
+        let mut symbols = vec![];
         let mut occurrences = vec![];
 
         for loc in &req.source_code_info.location {
-            if let Some(mut desc) =
+            if let Some(result) =
                 get_descriptors_from_path(DescriptorPathSegment::FileDescriptor(&req), &loc.path)
             {
-                let mut descriptors = req
-                    .name
-                    .clone()
-                    .expect("Missing relative path (why?)")
-                    .split("/")
-                    .map(|seg| Descriptor {
-                        name: seg.to_string(),
-                        suffix: Suffix::Namespace.into(),
-                        ..Default::default()
-                    })
-                    .collect::<Vec<Descriptor>>();
-                descriptors.append(&mut desc);
-                occurrences.push(Occurrence {
-                    symbol: format_symbol(Symbol {
-                        scheme: ".".to_string(),
-                        package: MessageField::some(Package {
-                            manager: ".".to_string(),
-                            name: req.package.clone().or(Some(".".to_string())).unwrap(),
-                            version: ".".to_string(),
-                            ..Default::default()
-                        }),
-                        descriptors,
+                let mut is_definition = false;
+                let package_name;
+                let mut descriptors;
+
+                match result {
+                    DescriptorsFromPathResult::Descriptors(desc) => {
+                        package_name = req.package.clone().or(Some(".".to_string())).unwrap();
+                        descriptors = desc;
+                        is_definition = true;
+                    }
+                    DescriptorsFromPathResult::TypeToResolve(ttr) => {
+                        descriptors = vec![];
+
+                        let mut seq = ttr.split(".").skip(1).collect::<Vec<&str>>();
+                        seq.reverse();
+                        let mut value = type_tree.get(&seq.pop().unwrap().to_string()).unwrap();
+                        package_name = value.name.clone();
+
+                        while let Some(key) = seq.pop() {
+                            value = value.children.get(&key.to_string()).unwrap();
+                            descriptors.push(type_tree_value_to_descriptor(value));
+                        }
+                    }
+                }
+
+                let symbol = format_symbol(Symbol {
+                    scheme: ".".to_string(),
+                    package: MessageField::some(Package {
+                        manager: ".".to_string(),
+                        name: package_name,
+                        version: ".".to_string(),
                         ..Default::default()
                     }),
+                    descriptors,
+                    ..Default::default()
+                });
+
+                if is_definition {
+                    symbols.push(SymbolInformation {
+                        symbol: symbol.clone(),
+                        ..Default::default()
+                    });
+                }
+
+                occurrences.push(Occurrence {
+                    symbol,
+                    symbol_roles: if is_definition {
+                        SymbolRole::Definition.value()
+                    } else {
+                        0
+                    },
                     range: loc.span.clone(),
                     ..Default::default()
                 })
@@ -190,9 +375,10 @@ fn main() {
         }
 
         documents.push(Document {
-            relative_path: req.name.expect("Missing relative path (why?)"),
+            relative_path: req.name.clone().expect("Missing relative path (why?)"),
             // TODO: Add to scip spec language list
             language: "ProtocolBuffers".to_string(),
+            symbols,
             occurrences,
             ..Default::default()
         });

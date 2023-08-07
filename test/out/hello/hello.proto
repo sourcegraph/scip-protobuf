@@ -2,27 +2,34 @@
   
   package hello;
   
+  import "swag.proto";
+  
   message Greeting {
-//        ^^^^^^^^ reference . . hello hello.proto/Greeting#
-    Kind kind = 1;
-//       ^^^^ reference . . hello hello.proto/Greeting#kind.
-    Recipient recipient = 2;
-//            ^^^^^^^^^ reference . . hello hello.proto/Greeting#recipient.
-  
-    enum Kind {
-//       ^^^^ reference . . hello hello.proto/Greeting#Kind#
-      Formal = 0;
-//    ^^^^^^ reference . . hello hello.proto/Greeting#Formal.
-      Informal = 1;
-//    ^^^^^^^^ reference . . hello hello.proto/Greeting#Informal.
-    }
-  
-    message Recipient {
-//          ^^^^^^^^^ reference . . hello hello.proto/Greeting#Recipient#
-      string name = 1;
-//           ^^^^ reference . . hello hello.proto/Greeting#Recipient#name.
-      int64 coolness_percent = 2;
-//          ^^^^^^^^^^^^^^^^ reference . . hello hello.proto/Greeting#Recipient#coolness_percent.
-    }
+//        ^^^^^^^^ definition . . hello Greeting#
+      Kind kind = 1;
+//    ^^^^ reference . . hello Greeting#Kind#
+//         ^^^^ definition . . hello Greeting#kind.
+      Recipient recipient = 2;
+//    ^^^^^^^^^ reference . . hello Greeting#Recipient#
+//              ^^^^^^^^^ definition . . hello Greeting#recipient.
+      
+      enum Kind {
+//         ^^^^ definition . . hello Greeting#Kind#
+          Formal = 0;
+//        ^^^^^^ definition . . hello Greeting#Formal.
+          Informal = 1;
+//        ^^^^^^^^ definition . . hello Greeting#Informal.
+      }
+      
+      message Recipient {
+//            ^^^^^^^^^ definition . . hello Greeting#Recipient#
+          string name = 1;
+//               ^^^^ definition . . hello Greeting#Recipient#name.
+          int64 coolness_percent = 2;
+//              ^^^^^^^^^^^^^^^^ definition . . hello Greeting#Recipient#coolness_percent.
+          Swag swag = 3;
+//        ^^^^ reference . . hello Swag#
+//             ^^^^ definition . . hello Greeting#Recipient#swag.
+      }
   }
   

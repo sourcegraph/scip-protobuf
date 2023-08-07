@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package bank;
+
+service Bank {
+    rpc Deposit (DepositRequest) returns (DepositResponse) {}
+    rpc Withdraw (WithdrawRequest) returns (WithdrawResponse) {}
+}
+
+message Account {
+    string id = 1;
+}
+
+message DepositRequest {
+    Account account = 1;
+    double amount = 2;
+}
+
+message DepositResponse {
+    bool successful = 1;
+    optional string error = 2;
+}
+
+message WithdrawRequest {
+    Account account = 1;
+    double amount = 2;
+}
+
+message WithdrawResponse {
+    bool successful = 1;
+    optional string error = 2;
+}

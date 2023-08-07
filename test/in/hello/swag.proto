@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package hello;
+
+enum Variant {
+    Cool = 0;
+    Awesome = 1;
+}
+
+message Swag {
+    Variant variant = 1;
+}

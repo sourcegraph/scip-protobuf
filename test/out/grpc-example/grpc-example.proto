@@ -1,0 +1,49 @@
+  syntax = "proto3";
+  
+  package bank;
+  
+  service Bank {
+      rpc Deposit (DepositRequest) returns (DepositResponse) {}
+      rpc Withdraw (WithdrawRequest) returns (WithdrawResponse) {}
+  }
+  
+  message Account {
+//        ^^^^^^^ definition . . bank Account#
+      string id = 1;
+//           ^^ definition . . bank Account#id.
+  }
+  
+  message DepositRequest {
+//        ^^^^^^^^^^^^^^ definition . . bank DepositRequest#
+      Account account = 1;
+//    ^^^^^^^ reference . . bank Account#
+//            ^^^^^^^ definition . . bank DepositRequest#account.
+      double amount = 2;
+//           ^^^^^^ definition . . bank DepositRequest#amount.
+  }
+  
+  message DepositResponse {
+//        ^^^^^^^^^^^^^^^ definition . . bank DepositResponse#
+      bool successful = 1;
+//         ^^^^^^^^^^ definition . . bank DepositResponse#successful.
+      optional string error = 2;
+//                    ^^^^^ definition . . bank DepositResponse#error.
+  }
+  
+  message WithdrawRequest {
+//        ^^^^^^^^^^^^^^^ definition . . bank WithdrawRequest#
+      Account account = 1;
+//    ^^^^^^^ reference . . bank Account#
+//            ^^^^^^^ definition . . bank WithdrawRequest#account.
+      double amount = 2;
+//           ^^^^^^ definition . . bank WithdrawRequest#amount.
+  }
+  
+  message WithdrawResponse {
+//        ^^^^^^^^^^^^^^^^ definition . . bank WithdrawResponse#
+      bool successful = 1;
+//         ^^^^^^^^^^ definition . . bank WithdrawResponse#successful.
+      optional string error = 2;
+//                    ^^^^^ definition . . bank WithdrawResponse#error.
+  }
+  

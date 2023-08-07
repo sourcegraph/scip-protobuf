@@ -1,0 +1,19 @@
+  syntax = "proto3";
+  
+  package hello;
+  
+  enum Variant {
+//     ^^^^^^^ definition . . hello Variant#
+      Cool = 0;
+//    ^^^^ definition . . hello Cool.
+      Awesome = 1;
+//    ^^^^^^^ definition . . hello Awesome.
+  }
+  
+  message Swag {
+//        ^^^^ definition . . hello Swag#
+      Variant variant = 1;
+//    ^^^^^^^ reference . . hello Variant#
+//            ^^^^^^^ definition . . hello Swag#variant.
+  }
+  
