@@ -16,9 +16,9 @@
       enum Kind {
 //         ^^^^ definition . . hello Greeting#Kind#
           Formal = 0;
-//        ^^^^^^ definition . . hello Greeting#Formal.
+//        ^^^^^^ definition . . hello Greeting#Kind#Formal.
           Informal = 1;
-//        ^^^^^^^^ definition . . hello Greeting#Informal.
+//        ^^^^^^^^ definition . . hello Greeting#Kind#Informal.
       }
       
       message Recipient {

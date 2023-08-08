@@ -3,8 +3,15 @@
   package bank;
   
   service Bank {
+//        ^^^^ definition . . bank Bank#
       rpc Deposit (DepositRequest) returns (DepositResponse) {}
+//        ^^^^^^^ definition . . bank Bank#Deposit.
+//                 ^^^^^^^^^^^^^^ reference . . bank DepositRequest#
+//                                          ^^^^^^^^^^^^^^^ reference . . bank DepositResponse#
       rpc Withdraw (WithdrawRequest) returns (WithdrawResponse) {}
+//        ^^^^^^^^ definition . . bank Bank#Withdraw.
+//                  ^^^^^^^^^^^^^^^ reference . . bank WithdrawRequest#
+//                                            ^^^^^^^^^^^^^^^^ reference . . bank WithdrawResponse#
   }
   
   message Account {

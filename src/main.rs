@@ -10,7 +10,7 @@ use std::{
 use protobuf::{
     descriptor::{
         DescriptorProto, EnumDescriptorProto, EnumValueDescriptorProto, FieldDescriptorProto,
-        FileDescriptorProto, FileDescriptorSet,
+        FileDescriptorProto, FileDescriptorSet, MethodDescriptorProto, ServiceDescriptorProto,
     },
     Enum, Message, MessageField,
 };
@@ -57,11 +57,15 @@ enum DescriptorPathSegment<'a> {
     MessageDescriptor(&'a DescriptorProto),
     EnumDescriptors(&'a Vec<EnumDescriptorProto>),
     EnumDescriptor(&'a EnumDescriptorProto),
+    ServiceDescriptors(&'a Vec<ServiceDescriptorProto>),
+    ServiceDescriptor(&'a ServiceDescriptorProto),
 
     FieldDescriptors(&'a Vec<FieldDescriptorProto>),
     FieldDescriptor(&'a FieldDescriptorProto),
     EnumValueDescriptors(&'a Vec<EnumValueDescriptorProto>),
     EnumValueDescriptor(&'a EnumValueDescriptorProto),
+    MethodDescriptors(&'a Vec<MethodDescriptorProto>),
+    MethodDescriptor(&'a MethodDescriptorProto),
 }
 
 enum DescriptorsFromPathResult {
@@ -83,6 +87,7 @@ fn get_descriptors_from_path(
             DescriptorPathSegment::FileDescriptor(fd) => match field {
                 4 => current_segment = DescriptorPathSegment::MessageDescriptors(&fd.message_type),
                 5 => current_segment = DescriptorPathSegment::EnumDescriptors(&fd.enum_type),
+                6 => current_segment = DescriptorPathSegment::ServiceDescriptors(&fd.service),
 
                 _ => return None,
             },
@@ -118,17 +123,45 @@ fn get_descriptors_from_path(
                     return None;
                 }
             }
-            DescriptorPathSegment::EnumDescriptor(en) => match field {
-                1 => {
-                    descriptors.push(Descriptor {
-                        name: en.name.clone().unwrap(),
-                        suffix: Suffix::Type.into(),
-                        ..Default::default()
-                    });
+            DescriptorPathSegment::EnumDescriptor(en) => {
+                descriptors.push(Descriptor {
+                    name: en.name.clone().unwrap(),
+                    suffix: Suffix::Type.into(),
+                    ..Default::default()
+                });
+
+                match field {
+                    1 => {
+                        // name, see above
+                    }
+                    2 => current_segment = DescriptorPathSegment::EnumValueDescriptors(&en.value),
+                    _ => return None,
+                };
+            }
+            DescriptorPathSegment::ServiceDescriptors(services) => {
+                current_segment =
+                    DescriptorPathSegment::ServiceDescriptor(&services[*field as usize]);
+                if i == path.len() - 1 {
+                    return None;
                 }
-                2 => current_segment = DescriptorPathSegment::EnumValueDescriptors(&en.value),
-                _ => return None,
-            },
+            }
+            DescriptorPathSegment::ServiceDescriptor(service) => {
+                descriptors.push(Descriptor {
+                    name: service.name.clone().unwrap(),
+                    suffix: Suffix::Type.into(),
+                    ..Default::default()
+                });
+
+                match field {
+                    1 => {
+                        // name, see above
+                    }
+                    2 => {
+                        current_segment = DescriptorPathSegment::MethodDescriptors(&service.method)
+                    }
+                    _ => return None,
+                };
+            }
 
             DescriptorPathSegment::FieldDescriptors(fields) => {
                 current_segment = DescriptorPathSegment::FieldDescriptor(&fields[*field as usize]);
@@ -166,6 +199,34 @@ fn get_descriptors_from_path(
                         suffix: Suffix::Term.into(),
                         ..Default::default()
                     });
+                }
+                _ => return None,
+            },
+            DescriptorPathSegment::MethodDescriptors(values) => {
+                current_segment = DescriptorPathSegment::MethodDescriptor(&values[*field as usize]);
+                if i == path.len() - 1 {
+                    return None;
+                }
+            }
+            DescriptorPathSegment::MethodDescriptor(method) => match field {
+                1 => {
+                    descriptors.push(Descriptor {
+                        name: method.name.clone().unwrap(),
+                        suffix: Suffix::Term.into(),
+                        ..Default::default()
+                    });
+                }
+                2 => {
+                    // Names always seem to be .a.b.c (check this assumption)
+                    return Some(DescriptorsFromPathResult::TypeToResolve(
+                        method.input_type.clone().unwrap(),
+                    ));
+                }
+                3 => {
+                    // Names always seem to be .a.b.c (check this assumption)
+                    return Some(DescriptorsFromPathResult::TypeToResolve(
+                        method.output_type.clone().unwrap(),
+                    ));
                 }
                 _ => return None,
             },

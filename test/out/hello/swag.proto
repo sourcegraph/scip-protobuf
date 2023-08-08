@@ -5,9 +5,9 @@
   enum Variant {
 //     ^^^^^^^ definition . . hello Variant#
       Cool = 0;
-//    ^^^^ definition . . hello Cool.
+//    ^^^^ definition . . hello Variant#Cool.
       Awesome = 1;
-//    ^^^^^^^ definition . . hello Awesome.
+//    ^^^^^^^ definition . . hello Variant#Awesome.
   }
   
   message Swag {
